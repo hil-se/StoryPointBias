@@ -97,12 +97,24 @@ def train_and_test(dataname, treatment = "None"):
     preds_train = model.predict(train_x).flatten()
     m_train = Metrics(train_y, preds_train)
     m_test = Metrics(test_y, preds_test)
-    result_train = {"Data": dataname, "Treatment": treatment, "MAE": m_train.mae(), "Pearson": m_train.pearsonr(), "Spearman": m_train.spearmanr(),
-              "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
-              "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"]))}
-    result_test = {"Data": dataname, "Treatment": treatment, "MAE": m_test.mae(), "Pearson": m_test.pearsonr(),
-              "Spearman": m_test.spearmanr(), "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
-              "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"]))}
+    result_train = {"Data": dataname, "Treatment": treatment, "MAE": m_train.mae(),
+                    "Pearson": m_train.pearsonr().statistic, "Spearman": m_train.spearmanr().statistic,
+                    "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
+                    "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"]))}
+    result_test = {"Data": dataname, "Treatment": treatment, "MAE": m_test.mae(),
+                   "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic,
+                   "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
+                   "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"]))}
+    # result_train = {"Data": dataname, "Treatment": treatment, "MAE": m_train.mae(),
+    #                 "Pearson": "(%.2f) %.2f" % (m_train.pearsonr().pvalue, m_train.pearsonr().statistic),
+    #                 "Spearman": "(%.2f) %.2f" % (m_train.spearmanr().pvalue, m_train.spearmanr().statistic),
+    #                 "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
+    #                 "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"]))}
+    # result_test = {"Data": dataname, "Treatment": treatment, "MAE": m_test.mae(),
+    #                "Pearson": "(%.2f) %.2f" % (m_test.pearsonr().pvalue, m_test.pearsonr().statistic),
+    #                "Spearman": "(%.2f) %.2f" % (m_test.spearmanr().pvalue, m_test.spearmanr().statistic),
+    #                "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
+    #                "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"]))}
     return result_train, result_test
 
 if __name__ == "__main__":
@@ -110,7 +122,6 @@ if __name__ == "__main__":
     treatments = ["None", "FairReweighing"]
     results_train = []
     results_test = []
-    np.random.seed(42)
     for treatment in treatments:
         result_train, result_test = train_and_test(data, treatment=treatment)
         results_train.append(result_train)

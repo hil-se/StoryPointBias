@@ -21,10 +21,10 @@ class Metrics:
         return m.r2_score(self.y, self.y_pred)
 
     def pearsonr(self):
-        return pearsonr(self.y_pred, self.y).statistic
+        return pearsonr(self.y_pred, self.y, alternative="greater")
 
     def spearmanr(self):
-        return spearmanr(self.y_pred, self.y).statistic
+        return spearmanr(self.y_pred, self.y, alternative="greater")
 
     def RBD(self, s):
         # s is an array of numerical values of a sensitive attribute
