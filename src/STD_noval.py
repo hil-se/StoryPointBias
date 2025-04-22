@@ -12,9 +12,8 @@ def loadData(dataName="jirasoftware_filtered"):
     df = pd.read_csv(path+dataName+".csv")
     return df
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-
 def process(dataName="jirasoftware_filtered", sensitive="is_internal"):
+    model = SentenceTransformer("all-MiniLM-L6-v2")
     data = loadData(dataName=dataName)
     embeddings = model.encode(data["text"])
     embedded = pd.DataFrame({"X": embeddings.tolist(), "Y": data["storypoint"], "A": data[sensitive], "split_mark": data["split_mark"]})
@@ -47,7 +46,7 @@ def build_model(input_dim):
 
     model.compile(
         optimizer='SGD',
-        loss="mse",
+        loss="mae",
         # loss=tf.keras.losses.Huber(delta=1.0),
         metrics=['mae']
     )
@@ -123,9 +122,10 @@ if __name__ == "__main__":
     results_train = []
     results_test = []
     for treatment in treatments:
-        result_train, result_test = train_and_test(data, treatment=treatment)
-        results_train.append(result_train)
-        results_test.append(result_test)
+        for _ in range(20):
+            result_train, result_test = train_and_test(data, treatment=treatment)
+            results_train.append(result_train)
+            results_test.append(result_test)
     results_train = pd.DataFrame(results_train)
     print(results_train)
     results_train.to_csv("../Results/STD_train.csv", index=False)
