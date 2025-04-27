@@ -99,11 +99,19 @@ def train_and_test(dataname, treatment = "None"):
     result_train = {"Data": dataname, "Treatment": treatment, "MAE": m_train.mae(),
                     "Pearson": m_train.pearsonr().statistic, "Spearman": m_train.spearmanr().statistic,
                     "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
-                    "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"]))}
+                    "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"])),
+                    "gAOD": m_train.gAOD(np.array(data[data["split_mark"] != "test"]["A"])),
+                    "DP": "%.2f (%.2f)" %(m_train.DPT(np.array(data[data["split_mark"] != "test"]["A"])), m_train.DPD(np.array(data[data["split_mark"] != "test"]["A"]))),
+                    "gDP": "%.2f (%.2f)" % (m_train.gDP(np.array(data[data["split_mark"] != "test"]["A"])))  }
     result_test = {"Data": dataname, "Treatment": treatment, "MAE": m_test.mae(),
                    "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic,
                    "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
-                   "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"]))}
+                   "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"])),
+                   "gAOD": m_test.gAOD(np.array(data[data["split_mark"] == "test"]["A"])),
+                   "DP": "%.2f (%.2f)" % (m_test.DPT(np.array(data[data["split_mark"] == "test"]["A"])),
+                                                         m_test.DPD(
+                                                             np.array(data[data["split_mark"] == "test"]["A"]))),
+                   "gDP": "%.2f (%.2f)" % (m_test.gDP(np.array(data[data["split_mark"] == "test"]["A"])))  }
     # result_train = {"Data": dataname, "Treatment": treatment, "MAE": m_train.mae(),
     #                 "Pearson": "(%.2f) %.2f" % (m_train.pearsonr().pvalue, m_train.pearsonr().statistic),
     #                 "Spearman": "(%.2f) %.2f" % (m_train.spearmanr().pvalue, m_train.spearmanr().statistic),

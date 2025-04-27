@@ -26,7 +26,7 @@ class Metrics:
     def spearmanr(self):
         return spearmanr(self.y_pred, self.y)
 
-    def RBD(self, s):
+    def DPD(self, s):
         # s is an array of numerical values of a sensitive attribute
         if len(np.unique(s)) == 2:
             error = np.array(self.y_pred) - np.array(self.y)
@@ -53,7 +53,7 @@ class Metrics:
         return bias_diff
 
 
-    def RBT(self, s):
+    def DPT(self, s):
         # s is an array of numerical values of a sensitive attribute
         if len(np.unique(s)) == 2:
             error = np.array(self.y_pred) - np.array(self.y)
@@ -90,6 +90,29 @@ class Metrics:
             dof = len(s)-1
         p = t.sf(np.abs(bias_diff), dof)
         return p
+
+    def gDP(self, s):
+        # s is an array of numerical values of a sensitive attribute
+        x = 0
+        N = len(self.y)
+        n = 0
+        for i in range(N):
+            for j in range(N):
+                if s[i] - s[j] > 0:
+                    n += 1
+                    if self.y[i] - self.y[j] > 0:
+                        if self.y_pred[i] < self.y_pred[j]:
+                            x -= 1
+                    elif self.y[j] - self.y[i] > 0:
+                        if self.y_pred[i] > self.y_pred[j]:
+                            x += 1
+
+        DPD = x / n
+        U = (n-np.abs(x))/2
+        mu = n / 2
+        sigma = np.sqrt(n *(N+1) / 12)
+        p = t.sf(U, 2*N-4, loc=mu, scale=sigma)
+        return p, DPD
 
     def Isep(self, s):
 
@@ -135,3 +158,30 @@ class Metrics:
 
         MI = Info / len(s)
         return MI
+
+    def gAOD(self, s):
+        # s is an array of numerical values of a sensitive attribute
+        t = n = tp = fp = tn = fn = 0
+        for i in range(len(self.y)):
+            for j in range(len(self.y)):
+                if s[i] - s[j] > 0:
+                    if self.y[i] - self.y[j] > 0:
+                        t += 1
+                        if self.y_pred[i] > self.y_pred[j]:
+                            tp += 1
+                        if self.y_pred[i] < self.y_pred[j]:
+                            fn += 1
+                    elif self.y[j] - self.y[i] > 0:
+                        n += 1
+                        if self.y_pred[i] > self.y_pred[j]:
+                            fp += 1
+                        elif self.y_pred[i] < self.y_pred[j]:
+                            tn += 1
+
+        tpr = tp / t
+        tnr = tn / n
+        fpr = fp / n
+        fnr = fn / t
+        aod = (tpr + fpr - tnr - fnr) / 2
+        return aod
+
