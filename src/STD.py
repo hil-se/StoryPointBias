@@ -56,14 +56,16 @@ def build_model(input_dim):
 def train_and_test(dataname, treatment = "None"):
 
     data = process(dataname, "is_internal")
-    train_x = np.array(data[data["split_mark"]!="test"]["X"].tolist())
-    train_y = np.array(data[data["split_mark"]!="test"]["Y"].tolist())
+    train_x = np.array(data[data["split_mark"] == "train"]["X"].tolist())
+    train_y = np.array(data[data["split_mark"] == "train"]["Y"].tolist())
+    val_x = np.array(data[data["split_mark"] == "val"]["X"].tolist())
+    val_y = np.array(data[data["split_mark"] == "val"]["Y"].tolist())
     test_x = np.array(data[data["split_mark"] == "test"]["X"].tolist())
     test_y = np.array(data[data["split_mark"] == "test"]["Y"].tolist())
 
     if treatment=="FairReweighing":
         db = DensityBalance()
-        weight = db.weight(np.array(data[data["split_mark"] != "test"]["A"]), train_y)
+        weight = db.weight(np.array(data[data["split_mark"] == "train"]["A"]), train_y)
     else:
         weight = None
 
@@ -73,8 +75,8 @@ def train_and_test(dataname, treatment = "None"):
     checkpoint_path = "checkpoint/STD.keras"
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', patience=100, factor=0.3, min_lr=1e-6, verbose=1)
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, monitor="loss", save_best_only=True,
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=100, factor=0.3, min_lr=1e-6, verbose=1)
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, monitor="val_loss", save_best_only=True,
                                                     save_weights_only=True, verbose=1)
     # early_stopping = tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=150, verbose=1,
     #                                                   restore_best_weights=True)
@@ -82,9 +84,9 @@ def train_and_test(dataname, treatment = "None"):
     history = model.fit(
         train_x, train_y,
         sample_weight=weight,
-        validation_data=(test_x, test_y),
+        validation_data=(val_x, val_y),
         batch_size=32,
-        epochs=600,
+        epochs=1000,
         callbacks=[reduce_lr, checkpoint],
         verbose=1
     )
@@ -98,11 +100,11 @@ def train_and_test(dataname, treatment = "None"):
     m_test = Metrics(test_y, preds_test)
     result_train = {"Data": dataname, "Treatment": treatment, "MAE": m_train.mae(),
                     "Pearson": m_train.pearsonr().statistic, "Spearman": m_train.spearmanr().statistic,
-                    "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
-                    "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"])),
-                    "gAOD": m_train.gAOD(np.array(data[data["split_mark"] != "test"]["A"])),
-                    "DP": "%.2f (%.2f)" %(m_train.DPT(np.array(data[data["split_mark"] != "test"]["A"])), m_train.DPD(np.array(data[data["split_mark"] != "test"]["A"]))),
-                    "gDP": "%.2f (%.2f)" % (m_train.gDP(np.array(data[data["split_mark"] != "test"]["A"])))  }
+                    "Isep": m_train.Isep(np.array(data[data["split_mark"] == "train"]["A"])),
+                    "Csep": m_train.Csep(np.array(data[data["split_mark"] == "train"]["A"])),
+                    "gAOD": m_train.gAOD(np.array(data[data["split_mark"] == "train"]["A"])),
+                    "DP": "%.2f (%.2f)" %(m_train.DPT(np.array(data[data["split_mark"] == "train"]["A"])), m_train.DPD(np.array(data[data["split_mark"] == "train"]["A"]))),
+                    "gDP": "%.2f (%.2f)" % (m_train.gDP(np.array(data[data["split_mark"] == "train"]["A"])))  }
     result_test = {"Data": dataname, "Treatment": treatment, "MAE": m_test.mae(),
                    "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic,
                    "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
