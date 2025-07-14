@@ -1,27 +1,31 @@
 from collections import Counter
 import numpy as np
 
-def Reweighing(X, y, A):
-    # X: independent variables (2-d pd.DataFrame)
-    # y: the dependent variable (1-d np.array)
-    # A: the name of the sensitive attributes (list of string)
-    groups_class = {}
-    group_weight = {}
-    for i in range(len(y)):
-        key_class = tuple([X[a][i] for a in A]+[y[i]])
-        key = key_class[:-1]
-        if key not in group_weight:
-            group_weight[key]=0
-        group_weight[key]+=1
-        if key_class not in groups_class:
-            groups_class[key_class]=[]
-        groups_class[key_class].append(i)
-    class_weight = Counter(y)
-    sample_weight = np.array([1.0]*len(y))
-    for key in groups_class:
-        weight = class_weight[key[-1]]*group_weight[key[:-1]]/len(groups_class[key])
-        for i in groups_class[key]:
-            sample_weight[i] = weight
-    # Rescale the total weights to len(y)
-    sample_weight = sample_weight * len(y) / sum(sample_weight)
-    return sample_weight
+def Reweighing(features):
+    N = len(features["Label"])
+    weight = np.array([1.0]*N)
+    PAY1 = 0
+    PAY0 = 0
+    AY1 = []
+    AY0 = []
+    for i in range(N):
+        if np.all(features["Aij"][i]==[0,1]):
+            if features["Label"][i] > 0:
+                PAY1 += 1
+                AY1.append(i)
+            else:
+                PAY0 += 1
+                AY0.append(i)
+    PAij = PAY1 + PAY0
+    if PAY1 == 0 or PAY0 == 0:
+        wAY1 = 1.0
+        wAY0 = 0.0
+    else:
+        wAY1 = PAij / (2 * PAY1)
+        wAY0 = PAij / (2 * PAY0)
+    for index in AY1:
+        weight[index] = wAY1
+    for index in AY0:
+        weight[index] = wAY0
+
+    return weight

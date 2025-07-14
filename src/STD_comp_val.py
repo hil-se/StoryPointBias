@@ -39,12 +39,6 @@ def build_model(input_dim):
         tf.keras.layers.Dense(1, activation="linear")
     ])
 
-    # initial_learning_rate = 0.001
-    # lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
-    #     initial_learning_rate, decay_steps=5000, alpha=0.0001
-    # )
-    # optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
-
     return model
 
 class ComparativeModel(tf.keras.Model):
@@ -86,11 +80,12 @@ class ComparativeModel(tf.keras.Model):
         self.loss_tracker.update_state(loss)
         return {"loss": self.loss_tracker.result()}
 
-    # def test_step(self, features):
-    #     encodings_A, encodings_B = self(features)
-    #     loss = self.compute_loss(encodings_A, encodings_B, features["Label"])
-    #     self.loss_tracker.update_state(loss)
-    #     return {"loss": self.loss_tracker.result()}
+    def test_step(self, data):
+        x, y = data
+        diff = self(x)
+        loss = self.compute_loss(y, diff)
+        self.loss_tracker.update_state(loss)
+        return {"loss": self.loss_tracker.result()}
 
     def predict(self, X):
         """Predicts preference between two items."""
@@ -98,6 +93,7 @@ class ComparativeModel(tf.keras.Model):
 
 def generate_comparative_judgments(train_list, N=1):
     m = len(train_list)
+    train_list.index = range(m)
     features = {"A": [], "B": [], "Label": []}
     seen = set()
     for i in range(m):
@@ -110,19 +106,39 @@ def generate_comparative_judgments(train_list, N=1):
                 features["A"].append(train_list["X"][i])
                 features["B"].append(train_list["X"][j])
                 features["Label"].append(1.0)
-                # features.append({"A": train_list["A"][i], "B": train_list["A"][j], "Label": 1.0})
                 n += 1
             elif train_list["Y"][i] < train_list["Y"][j]:
                 features["A"].append(train_list["X"][i])
                 features["B"].append(train_list["X"][j])
                 features["Label"].append(-1.0)
-                # features.append({"A": train_list["A"][i], "B": train_list["A"][j], "Label": -1.0})
                 n += 1
             seen.add((i, j))
     features = {key: np.array(features[key]) for key in features}
     return features
 
-def comparative_learning(train_x, test_x, features, loss = "hinge"):
+
+def generate_all(train_list):
+    m = len(train_list)
+    train_list.index = range(m)
+    features = {"A": [], "B": [], "Label": []}
+    seen = set()
+    for i in range(m):
+        for j in range(m):
+            if (i, j) in seen or (j, i) in seen:
+                continue
+            if train_list["Y"][i] > train_list["Y"][j]:
+                features["A"].append(train_list["X"][i])
+                features["B"].append(train_list["X"][j])
+                features["Label"].append(1.0)
+            elif train_list["Y"][i] < train_list["Y"][j]:
+                features["A"].append(train_list["X"][i])
+                features["B"].append(train_list["X"][j])
+                features["Label"].append(-1.0)
+            seen.add((i, j))
+    features = {key: np.array(features[key]) for key in features}
+    return features
+
+def comparative_learning(train_x, test_x, features, loss = "hinge", val = None):
     encoder = build_model((train_x.shape[1]))
     de = ComparativeModel(encoder=encoder, w_loss = loss)
 
@@ -131,12 +147,17 @@ def comparative_learning(train_x, test_x, features, loss = "hinge"):
 
     # de.compile(optimizer="SGD", loss=tf.keras.losses.Hinge())
     de.compile(optimizer="adam")
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', patience=100, factor=0.3, min_lr=1e-6, verbose=1)
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, monitor="loss", save_best_only=True,
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', patience=100, factor=0.3, min_lr=1e-6, verbose=1)
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, monitor="val_loss", save_best_only=True,
                                                     save_weights_only=True, verbose=1, )
 
+    if val:
+        val_data = (val, val["Label"])
+    else:
+        val_data = None
+
     # Train model
-    history = de.fit(features, features["Label"], epochs=100, batch_size=32, callbacks=[reduce_lr, checkpoint],
+    history = de.fit(features, features["Label"], validation_data=val_data, epochs=300, batch_size=32, callbacks=[reduce_lr, checkpoint],
                      verbose=1)
     print("\nLoading best checkpoint model...")
     de.load_weights(checkpoint_path)
@@ -158,28 +179,29 @@ def train_and_test(dataname, N=1):
     repeats = 1
 
     data = process(dataName=dataname, sensitive="is_internal")
-    train_x = np.array(data[data["split_mark"] != "test"]["X"].tolist())
-    train_y = np.array(data[data["split_mark"] != "test"]["Y"].tolist())
+    train_x = np.array(data[data["split_mark"] == "train"]["X"].tolist())
+    train_y = np.array(data[data["split_mark"] == "train"]["Y"].tolist())
     test_x = np.array(data[data["split_mark"] == "test"]["X"].tolist())
     test_y = np.array(data[data["split_mark"] == "test"]["Y"].tolist())
-    features = generate_comparative_judgments(data[data["split_mark"] != "test"], N=N)
+    features = generate_comparative_judgments(data[data["split_mark"] == "train"], N=N)
+    features_val = generate_comparative_judgments(data[data["split_mark"] == "val"], N=N)
 
     train_results = []
     test_results = []
 
     # Comparative learning
     for i in range(repeats):
-        preds_test, preds_train = comparative_learning(train_x, test_x, features)
+        preds_test, preds_train = comparative_learning(train_x, test_x, features, val = features_val)
 
         m_train = Metrics(train_y, preds_train)
         m_test = Metrics(test_y, preds_test)
-        result_train = {"Data": dataname, "N": N, "MAE": m_train.mae(), "Treatment": "CL",
+        result_train = {"Data": dataname, "N": N, "Treatment": "CL",
                         "Pearson": m_train.pearsonr().statistic, "Spearman": m_train.spearmanr().statistic,
-                        # "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
-                        # "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"])),
-                        # "gAOD": m_train.gAOD(np.array(data[data["split_mark"] != "test"]["A"]))
+                        # "Isep": m_train.Isep(np.array(data[data["split_mark"] == "train"]["A"])),
+                        # "Csep": m_train.Csep(np.array(data[data["split_mark"] == "train"]["A"])),
+                        # "gAOD": m_train.gAOD(np.array(data[data["split_mark"] == "train"]["A"]))
                         }
-        result_test = {"Data": dataname, "N": N, "MAE": m_test.mae(), "Treatment": "CL",
+        result_test = {"Data": dataname, "N": N, "Treatment": "CL",
                        "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic,
                        # "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
                        # "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"])),
@@ -212,23 +234,23 @@ def train_and_test(dataname, N=1):
     #     test_results.append(result_test)
 
     # Linear SVM
-    preds_test, preds_train = LinearSVM(train_x, test_x, features, loss = "hinge")
-    m_train = Metrics(train_y, preds_train)
-    m_test = Metrics(test_y, preds_test)
-    result_train = {"Data": dataname, "N": N, "MAE": m_train.mae(), "Treatment": "lsvm",
-                    "Pearson": m_train.pearsonr().statistic, "Spearman": m_train.spearmanr().statistic,
-                    # "Isep": m_train.Isep(np.array(data[data["split_mark"] != "test"]["A"])),
-                    # "Csep": m_train.Csep(np.array(data[data["split_mark"] != "test"]["A"])),
-                    # "gAOD": m_train.gAOD(np.array(data[data["split_mark"] != "test"]["A"]))
-                     }
-    result_test = {"Data": dataname, "N": N, "MAE": m_test.mae(), "Treatment": "lsvm",
-                   "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic,
-                   # "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
-                   # "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"])),
-                   # "gAOD": m_test.gAOD(np.array(data[data["split_mark"] == "test"]["A"]))
-                    }
-    train_results.append(result_train)
-    test_results.append(result_test)
+    # preds_test, preds_train = LinearSVM(train_x, test_x, features, loss = "hinge")
+    # m_train = Metrics(train_y, preds_train)
+    # m_test = Metrics(test_y, preds_test)
+    # result_train = {"Data": dataname, "N": N, "MAE": m_train.mae(), "Treatment": "lsvm",
+    #                 "Pearson": m_train.pearsonr().statistic, "Spearman": m_train.spearmanr().statistic,
+    #                 # "Isep": m_train.Isep(np.array(data[data["split_mark"] == "train"]["A"])),
+    #                 # "Csep": m_train.Csep(np.array(data[data["split_mark"] == "train"]["A"])),
+    #                 # "gAOD": m_train.gAOD(np.array(data[data["split_mark"] == "train"]["A"]))
+    #                  }
+    # result_test = {"Data": dataname, "N": N, "MAE": m_test.mae(), "Treatment": "lsvm",
+    #                "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic,
+    #                # "Isep": m_test.Isep(np.array(data[data["split_mark"] == "test"]["A"])),
+    #                # "Csep": m_test.Csep(np.array(data[data["split_mark"] == "test"]["A"])),
+    #                # "gAOD": m_test.gAOD(np.array(data[data["split_mark"] == "test"]["A"]))
+    #                 }
+    # train_results.append(result_train)
+    # test_results.append(result_test)
 
     # for i in range(repeats):
     #     preds_test, preds_train = LinearSVM(train_x, test_x, features, loss="squared_hinge")
@@ -255,7 +277,7 @@ if __name__ == "__main__":
     data = "jirasoftware_filtered"
     results_train = []
     results_test = []
-    # for n in [1,2,3,4,5,10]:
+    # for n in [1, 2, 3, 4, 5, 10]:
     for n in [1]:
         for _ in range(10):
             result_train, result_test = train_and_test(data, N=n)
@@ -263,10 +285,10 @@ if __name__ == "__main__":
             results_test.extend(result_test)
     results_train = pd.DataFrame(results_train)
     print(results_train)
-    results_train.to_csv("../Results/STD_comp_train.csv", index=False)
+    results_train.to_csv("../Results/STD_compval_train.csv", index=False)
     results_test = pd.DataFrame(results_test)
     print(results_test)
-    results_test.to_csv("../Results/STD_comp_test.csv", index=False)
+    results_test.to_csv("../Results/STD_compval_test.csv", index=False)
 
 
 
