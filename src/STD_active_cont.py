@@ -110,8 +110,9 @@ def train(model, train_x, train_y, treatment = "None"):
 if __name__ == "__main__":
     data = "jirasoftware_filtered"
     # treatments = ["None"]
-    tf.random.set_seed(0)
-    np.random.seed(0)
+    seed = 10
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
     results = active(data, init=10, step = 10, delta=0.5)
     results = pd.DataFrame(results)
     print(results)

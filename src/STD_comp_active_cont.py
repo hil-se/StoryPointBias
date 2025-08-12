@@ -194,8 +194,9 @@ def active(dataname, init = 10, step = 10):
 
 if __name__ == "__main__":
     data = "jirasoftware_filtered"
-    tf.random.set_seed(0)
-    np.random.seed(0)
+    seed = 1
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
     results = active(data, init=10, step = 10)
     results = pd.DataFrame(results)
     print(results)
