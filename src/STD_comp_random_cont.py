@@ -139,15 +139,17 @@ def comparative_learning(de, train_x, test_x, features):
     preds_train = de.predict(train_x).flatten()
     return preds_test, preds_train
 
-def acquire(seen, preds_train, y, step = 10):
-    pairs = {}
-    n = len(preds_train)
-    for i in range(n):
-        for j in range(i+1, n):
-            if (i,j) in seen or (j,i) in seen or y[i]==y[j]:
-                continue
-            pairs[(i,j)] = np.abs(preds_train[i] - preds_train[j])
-    return list(dict(sorted(pairs.items(), key=lambda item: item[1])).keys())[:step]
+def acquire(seen, m, y, step = 10):
+    n = 0
+    to_add = []
+    while n < step:
+        i = np.random.randint(0, m)
+        j = np.random.randint(0, m)
+        if (i, j) in seen or (j, i) in seen or y[i]==y[j]:
+            continue
+        n += 1
+        to_add.append((i,j))
+    return to_add
 
 def active(dataname, init = 10, step = 10):
 
@@ -175,7 +177,7 @@ def active(dataname, init = 10, step = 10):
                        "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic
                        }
         results.append(result_test)
-        to_add = acquire(seen, preds_train, train_data["Y"], step = step)
+        to_add = acquire(seen, len(train_data), train_data["Y"], step = step)
         for tup in to_add:
             if train_data["Y"][tup[0]] > train_data["Y"][tup[1]]:
                 features["A"] = np.append(features["A"], [train_data["X"][tup[0]]], axis = 0)
@@ -199,7 +201,7 @@ if __name__ == "__main__":
     results = active(data, init=10, step = 10)
     results = pd.DataFrame(results)
     print(results)
-    results.to_csv("../Results/STD_comp_active_cont.csv", index=False)
+    results.to_csv("../Results/STD_comp_random_cont.csv", index=False)
 
 
 

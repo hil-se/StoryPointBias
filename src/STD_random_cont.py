@@ -35,15 +35,6 @@ def build_model(input_dim):
 
     return model
 
-def acquire(inds, pool, preds_train, train_x, train_y, delta = 0.5, step = 10):
-    axs = []
-    for i in pool:
-        w = np.array([np.exp(-(train_x[k] - train_x[i])**2)/(train_x[k] - train_x[i])**2 for k in inds])
-        v = w / np.sum(w)
-        s2 = np.sum([v[j]*(train_y[k] - preds_train[i])**2 for j,k in enumerate(inds)])
-        z = np.arctan(1/np.sum(w))*2/np.pi
-        axs.append(s2+delta*z)
-    return list(np.array(pool)[np.argsort(axs)[::-1][:step]])
 
 def active(dataname, treatment = "None", init = 10, step = 10, delta = 5.0):
     data = process(dataname, "is_internal")
@@ -61,12 +52,11 @@ def active(dataname, treatment = "None", init = 10, step = 10, delta = 5.0):
     while pool:
         model = train(model, train_x[inds], train_y[inds], treatment = treatment)
         preds_test = model.predict(test_x).flatten()
-        preds_train = model.predict(train_x).flatten()
         m_test = Metrics(test_y, preds_test)
         result = {"N": n, "MAE": m_test.mae(), "Treatment": treatment, "MAE": m_test.mae(),
                        "Pearson": m_test.pearsonr().statistic, "Spearman": m_test.spearmanr().statistic}
         results.append(result)
-        to_add = acquire(inds, pool, preds_train, train_x, train_y, delta = delta, step = step)
+        to_add = list(np.random.choice(pool, min((step,len(pool))), replace=False))
         inds = list(set(inds)|set(to_add))
         pool = list(set(pool)-set(to_add))
         n = len(inds)
@@ -115,7 +105,7 @@ if __name__ == "__main__":
     results = active(data, init=10, step = 10, delta=0.5)
     results = pd.DataFrame(results)
     print(results)
-    results.to_csv("../Results/STD_active_cont.csv", index=False)
+    results.to_csv("../Results/STD_random_cont.csv", index=False)
 
 
 
