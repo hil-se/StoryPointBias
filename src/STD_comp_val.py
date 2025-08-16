@@ -168,7 +168,7 @@ def comparative_learning(train_x, test_x, features, loss = "hinge", val = None):
 
 def LinearSVM(train_x, test_x, features, loss = "hinge"):
     train_feature = features["A"] - features["B"]
-    model = LinearSVC(loss = loss)
+    model = LinearSVC(loss = loss, fit_intercept = False)
     model.fit(train_feature, features["Label"])
     preds_test = model.decision_function(test_x).flatten()
     preds_train = model.decision_function(train_x).flatten()
